@@ -10,9 +10,159 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+    # =========================================================
+    # 1. CHECKOUT
+    # =========================================================
     - name: Checkout code
       uses: actions/checkout@v4
 
+    # =========================================================
+    # 2. KIỂM TRA FILE CẦN THIẾT
+    # =========================================================
+    - name: Check required files
+      run: |
+        echo "🔍 KIỂM TRA FILE CẦN THIẾT"
+        echo "=========================="
+        
+        REQUIRED_FILES=("main.py" "buildozer.spec")
+        MISSING=0
+        
+        for file in "${REQUIRED_FILES[@]}"; do
+          if [ -f "$file" ]; then
+            echo "✅ $file exists"
+          else
+            echo "❌ $file MISSING"
+            MISSING=1
+          fi
+        done
+        
+        if [ $MISSING -eq 1 ]; then
+          echo "❌ Thiếu file cần thiết, dừng build"
+          exit 1
+        fi
+        
+        echo "✅ Tất cả file cần thiết đều có"
+
+    # =========================================================
+    # 3. KIỂM TRA CÚ PHÁP PYTHON
+    # =========================================================
+    - name: Check Python syntax
+      run: |
+        echo "🔍 KIỂM TRA CÚ PHÁP PYTHON"
+        echo "=========================="
+        
+        python -m py_compile main.py
+        if [ $? -eq 0 ]; then
+          echo "✅ main.py syntax OK"
+        else
+          echo "❌ main.py syntax ERROR"
+          exit 1
+        fi
+
+    # =========================================================
+    # 4. KIỂM TRA AST (Cấu trúc code)
+    # =========================================================
+    - name: Check Python AST
+      run: |
+        echo "🔍 KIỂM TRA CẤU TRÚC CODE (AST)"
+        echo "================================"
+        
+        python -c "
+import ast
+import sys
+
+with open('main.py', 'r', encoding='utf-8') as f:
+    try:
+        ast.parse(f.read())
+        print('✅ AST parse OK')
+    except SyntaxError as e:
+        print(f'❌ AST parse error: {e}')
+        sys.exit(1)
+"
+
+    # =========================================================
+    # 5. KIỂM TRA FILE SPEC
+    # =========================================================
+    - name: Check buildozer.spec
+      run: |
+        echo "🔍 KIỂM TRA BUILDozer.SPEC"
+        echo "=========================="
+        
+        # Kiểm tra các dòng bắt buộc
+        REQUIRED_LINES=("requirements" "android.api" "android.ndk" "android.permissions")
+        
+        for line in "${REQUIRED_LINES[@]}"; do
+          if grep -q "^$line" buildozer.spec; then
+            echo "✅ Found: $line"
+          else
+            echo "⚠️ Warning: $line not found in spec"
+          fi
+        done
+        
+        # Kiểm tra python version
+        if grep -q "python3==3.10.12" buildozer.spec; then
+          echo "✅ Python 3.10.12 configured"
+        else
+          echo "⚠️ Python version not fixed to 3.10.12"
+        fi
+        
+        # Kiểm tra Kivy version
+        if grep -q "kivy==2.2.1" buildozer.spec; then
+          echo "✅ Kivy 2.2.1 configured"
+        else
+          echo "⚠️ Kivy version not fixed"
+        fi
+        
+        echo "✅ buildozer.spec check completed"
+
+    # =========================================================
+    # 6. KIỂM TRA IMPORT TRONG CODE
+    # =========================================================
+    - name: Check Python imports
+      run: |
+        echo "🔍 KIỂM TRA IMPORT THƯ VIỆN"
+        echo "=========================="
+        
+        python -c "
+import sys
+import warnings
+warnings.filterwarnings('ignore')
+
+# Chỉ kiểm tra import trên PC, không cần Android libs
+required_modules = ['kivy', 'kivy.app', 'kivy.uix.screenmanager']
+missing = []
+
+for module in required_modules:
+    try:
+        __import__(module)
+        print(f'✅ {module} OK')
+    except ImportError as e:
+        print(f'⚠️ {module}: {e}')
+        
+print('✅ Import check completed')
+"
+
+    # =========================================================
+    # 7. KIỂM TRA DEPENDENCIES TRÊN REPO
+    # =========================================================
+    - name: Check repository structure
+      run: |
+        echo "🔍 KIỂM TRA CẤU TRÚC REPOSITORY"
+        echo "==============================="
+        
+        echo "Files in repository:"
+        ls -la
+        
+        # Kiểm tra file json
+        if [ -f "wifi_printers.json" ]; then
+          echo "✅ wifi_printers.json exists"
+        else
+          echo "⚠️ wifi_printers.json not found (will be created automatically)"
+        fi
+
+    # =========================================================
+    # 8. SETUP ENVIRONMENT
+    # =========================================================
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
@@ -24,19 +174,78 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Install dependencies
+    # =========================================================
+    # 9. INSTALL DEPENDENCIES
+    # =========================================================
+    - name: Install system dependencies
       run: |
+        echo "🔍 CÀI ĐẶT DEPENDENCIES HỆ THỐNG"
+        echo "================================"
+        
         sudo apt-get update
         sudo apt-get install -y libzbar-dev
+        echo "✅ libzbar-dev installed"
+
+    - name: Install Python packages
+      run: |
+        echo "🔍 CÀI ĐẶT PACKAGES PYTHON"
+        echo "========================="
+        
         pip install --upgrade pip
         pip install buildozer cython
+        echo "✅ buildozer and cython installed"
 
+    # =========================================================
+    # 10. CACHE
+    # =========================================================
+    - name: Cache Buildozer
+      uses: actions/cache@v4
+      with:
+        path: ~/.buildozer
+        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+
+    # =========================================================
+    # 11. BUILD APK
+    # =========================================================
     - name: Build APK
       run: |
+        echo "🔍 BẮT ĐẦU BUILD APK"
+        echo "==================="
+        echo "⏳ Quá trình build có thể mất 15-20 phút..."
+        
         buildozer android debug
 
+    # =========================================================
+    # 12. KIỂM TRA KẾT QUẢ
+    # =========================================================
+    - name: Check build result
+      run: |
+        echo "🔍 KIỂM TRA KẾT QUẢ BUILD"
+        echo "========================"
+        
+        if [ -d "bin" ] && [ "$(ls -A bin/*.apk 2>/dev/null)" ]; then
+          echo "✅ APK đã được tạo thành công!"
+          ls -la bin/
+        else
+          echo "❌ KHÔNG TÌM THẤY FILE APK"
+          exit 1
+        fi
+
+    # =========================================================
+    # 13. UPLOAD APK
+    # =========================================================
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: order-printer
+        name: order-printer-apk
         path: bin/*.apk
+
+    # =========================================================
+    # 14. UPLOAD LOG (NẾU LỖI)
+    # =========================================================
+    - name: Upload error log
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-error-log
+        path: .buildozer/logs/
