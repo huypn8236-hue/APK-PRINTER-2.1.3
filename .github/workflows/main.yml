@@ -10,74 +10,47 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    # B1: Checkout
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # B2: Check file tồn tại
     - name: Check required files
       run: |
-        echo "=== CHECK FILE ==="
+        echo "=== CHECK FILES ==="
         if [ -f "main.py" ]; then
-          echo "OK: main.py"
+          echo "✅ main.py"
         else
-          echo "FAIL: main.py not found"
+          echo "❌ main.py not found"
           exit 1
         fi
         if [ -f "buildozer.spec" ]; then
-          echo "OK: buildozer.spec"
+          echo "✅ buildozer.spec"
         else
-          echo "FAIL: buildozer.spec not found"
+          echo "❌ buildozer.spec not found"
           exit 1
         fi
 
-    # B3: Check Python syntax
     - name: Check Python syntax
       run: |
         echo "=== CHECK SYNTAX ==="
         python -m py_compile main.py
         if [ $? -eq 0 ]; then
-          echo "OK: Python syntax"
+          echo "✅ Python syntax OK"
         else
-          echo "FAIL: Python syntax error"
+          echo "❌ Python syntax error"
           exit 1
         fi
 
-    # B4: Check buildozer.spec
-    - name: Check buildozer.spec content
-      run: |
-        echo "=== CHECK SPEC ==="
-        grep -q "requirements" buildozer.spec && echo "OK: requirements"
-        grep -q "android.api" buildozer.spec && echo "OK: android.api"
-        grep -q "android.ndk" buildozer.spec && echo "OK: android.ndk"
-        grep -q "android.permissions" buildozer.spec && echo "OK: permissions"
-
-    # B5: Setup Python
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
 
-    # B6: Verify Python
-    - name: Verify Python
-      run: |
-        echo "=== PYTHON ==="
-        python --version
-
-    # B7: Setup Java
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    # B8: Verify Java
-    - name: Verify Java
-      run: |
-        echo "=== JAVA ==="
-        java -version
-
-    # B9: Install dependencies
     - name: Install dependencies
       run: |
         echo "=== INSTALL DEPS ==="
@@ -85,58 +58,100 @@ jobs:
         sudo apt-get install -y libzbar-dev
         pip install --upgrade pip
         pip install buildozer cython
-        echo "OK: Dependencies installed"
 
-    # B10: Verify buildozer
-    - name: Verify buildozer
-      run: |
-        echo "=== BUILDIZER ==="
-        buildozer --version
-
-    # B11: Cache
     - name: Cache Buildozer
       uses: actions/cache@v4
       with:
         path: ~/.buildozer
         key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
 
-    # B12: Clean old builds
     - name: Clean previous builds
       run: |
-        echo "=== CLEAN ==="
         buildozer android clean || true
         rm -rf bin || true
 
-    # B13: Build APK
     - name: Build APK
+      id: build
+      continue-on-error: true
       run: |
         echo "=== BUILD APK ==="
-        echo "Time: ~15-20 minutes"
-        buildozer android debug
+        buildozer android debug 2>&1 | tee build_output.log
+        echo "BUILD_EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
 
-    # B14: Check result
-    - name: Check build result
+    - name: EXTRACT AND DISPLAY ALL ERRORS
+      if: steps.build.outputs.BUILD_EXIT_CODE != 0
       run: |
-        echo "=== CHECK RESULT ==="
-        if [ -d "bin" ] && ls bin/*.apk 1>/dev/null 2>&1; then
-          echo "OK: APK created"
-          ls -la bin/
-        else
-          echo "FAIL: No APK found"
+        echo ""
+        echo "=========================================="
+        echo "🔴 DANH SÁCH LỖI PHÁT HIỆN 🔴"
+        echo "=========================================="
+        echo ""
+        
+        ERROR_FILE="build_output.log"
+        
+        if [ ! -f "$ERROR_FILE" ]; then
+          echo "⚠️ Không tìm thấy file log build"
           exit 1
         fi
+        
+        echo "--- 1. LỖI DEPENDENCIES / THƯ VIỆN ---"
+        grep -E "No module named|ImportError|ModuleNotFoundError|Could not find|No matching distribution" $ERROR_FILE 2>/dev/null | head -20 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 2. LỖI COMPILE / C/C++ ---"
+        grep -E "error:|Error:|ERROR:" $ERROR_FILE 2>/dev/null | grep -v "warning:" | head -30 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 3. LỖI JAVA / GRADLE ---"
+        grep -E "FAILED|java:|gradle|JAVA_HOME|JDK" $ERROR_FILE 2>/dev/null | head -15 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 4. LỖI ANDROID SDK / NDK ---"
+        grep -E "sdkmanager|ndk|SDK|license|build-tools|platform-tools" $ERROR_FILE 2>/dev/null | grep -i "error\|fail\|missing" | head -15 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 5. LỖI THIẾU FILE ---"
+        grep -E "No such file|not found|missing" $ERROR_FILE 2>/dev/null | grep -v "warning:" | head -15 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 6. LỖI KIVY / ZBAR ---"
+        grep -E "kivy|zbarcam|zbar|Camera" $ERROR_FILE 2>/dev/null | grep -i "error\|fail" | head -10 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 7. LỖI PYTHON VERSION ---"
+        grep -E "Python [0-9]|version.*[0-9]" $ERROR_FILE 2>/dev/null | grep -i "error\|fail\|not supported" | head -10 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "=========================================="
+        echo "📁 Log đầy đủ được lưu trong artifact"
+        echo "=========================================="
+        
+        exit 1
 
-    # B15: Upload APK
+    - name: Upload full build log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: full-build-log
+        path: build_output.log
+
+    - name: Upload error summary
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: error-summary
+        path: build_output.log
+
+    - name: Check build result and fail if error
+      if: steps.build.outputs.BUILD_EXIT_CODE != 0
+      run: |
+        echo "❌ BUILD THẤT BẠI!"
+        echo "Mã lỗi: ${{ steps.build.outputs.BUILD_EXIT_CODE }}"
+        exit 1
+
     - name: Upload APK
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: order-printer-apk
         path: bin/*.apk
-
-    # B16: Upload error logs if fail
-    - name: Upload error logs
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-logs
-        path: .buildozer/logs/
