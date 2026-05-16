@@ -1,55 +1,140 @@
 [app]
 
-# --- Thông tin ứng dụng ---
+# ==================================================
+# APP INFO
+# ==================================================
 title = Order Printer
 package.name = orderprinter
-package.domain = org.orderprinter
+package.domain = org.example
 
-# --- File nguồn ---
-source.dir = .
-source.include_exts = py,png,jpg,jpeg,ttf,xml,json
-
-# --- Phiên bản ---
 version = 1.0.0
 
-# --- Hiển thị ---
+# ==================================================
+# SOURCE
+# ==================================================
+source.dir = .
+source.include_exts = py,png,jpg,jpeg,ttf,json,kv
+
+# loại file không cần đóng gói
+exclude_patterns = \
+    tests,\
+    docs,\
+    *.pyc,\
+    *.pyo,\
+    *.md,\
+    __pycache__,\
+    .git,\
+    .github
+
+# ==================================================
+# ICON / SPLASH
+# ==================================================
+icon.filename = %(source.dir)s/icon.png
+
+presplash.filename = %(source.dir)s/icon.png
+android.presplash_color = #FFFFFF
+
+# ==================================================
+# DISPLAY
+# ==================================================
 orientation = portrait
 fullscreen = 0
 
-# --- Thư viện yêu cầu (ĐÃ SỬA) ---
-requirements = python3,kivy==2.2.1,pyjnius,android,pillow==10.2.0,plyer,certifi,kivy-garden.zbarcam
+# ==================================================
+# REQUIREMENTS
+# ==================================================
+# KHỚP trực tiếp với code main.py:
+#
+# - kivy
+# - pyjnius
+# - pillow
+# - certifi
+# - plyer
+# - zbarcam
+#
+# KHÔNG thêm reportlab vì Android không dùng
+#
+requirements = \
+    python3==3.10.11,\
+    kivy==2.3.0,\
+    pyjnius,\
+    pillow,\
+    plyer,\
+    certifi,\
+    kivy-garden.zbarcam
 
-# --- Quyền Android ---
-android.permissions = CAMERA,INTERNET,ACCESS_NETWORK_STATE,BLUETOOTH,BLUETOOTH_ADMIN,BLUETOOTH_CONNECT,BLUETOOTH_SCAN,ACCESS_FINE_LOCATION,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,VIBRATE
+# ==================================================
+# ANDROID PERMISSIONS
+# ==================================================
+# CAMERA -> scan barcode
+# INTERNET -> Wi-Fi print
+# ACCESS_NETWORK_STATE -> kiểm tra mạng
+# Bluetooth -> ESC/POS printer
+#
+android.permissions = \
+    CAMERA,\
+    INTERNET,\
+    ACCESS_NETWORK_STATE,\
+    BLUETOOTH,\
+    BLUETOOTH_ADMIN,\
+    BLUETOOTH_CONNECT,\
+    BLUETOOTH_SCAN,\
+    ACCESS_FINE_LOCATION,\
+    VIBRATE
 
-# --- Tài nguyên đính kèm (có thể bỏ dòng này nếu không có file) ---
-# android.add_assets = wifi_printers.json
+# NOTE:
+# WRITE_EXTERNAL_STORAGE & READ_EXTERNAL_STORAGE
+# đã deprecated Android 13+
+# app hiện không cần storage ngoài
 
-# --- Màn hình khởi động ---
-android.presplash_color = #FFFFFF
+# ==================================================
+# ASSETS
+# ==================================================
+android.add_assets = wifi_printers.json
 
-# --- Android SDK / NDK (ĐÃ SỬA) ---
-android.api = 30
-android.minapi = 21
-android.ndk = 23b
-android.ndk_api = 21
+# NOTE:
+# arial.ttf chưa được code sử dụng
+# không cần add vào APK
+
+# ==================================================
+# ANDROID SDK / NDK
+# ==================================================
+android.api = 34
+
+# Bluetooth modern APIs ổn định hơn từ 24+
+android.minapi = 24
+
+android.ndk = 25b
+android.ndk_api = 24
+
 android.archs = arm64-v8a,armeabi-v7a
 
-# --- p4a branch (ĐÃ SỬA) ---
-p4a.branch = develop
-
-android.allow_backup = True
 android.accept_sdk_license = True
 android.enable_androidx = True
+android.allow_backup = True
 
-# --- Giảm kích thước APK ---
-exclude_patterns = tests,docs,*.pyc,*.pyo,*.md,__pycache__,.git
+# ==================================================
+# PYTHON-FOR-ANDROID
+# ==================================================
+# develop hiện ổn định hơn master
+# đặc biệt trên GitHub Actions
+#
+p4a.branch = develop
 
-# --- Môi trường ---
-environment = 
-    PYTHONOPTIMIZE=2
+# rất quan trọng cho camera + kivy
+p4a.bootstrap = sdl2
+
+# ==================================================
+# ENVIRONMENT
+# ==================================================
+environment = \
+    PYTHONOPTIMIZE=2,\
     KIVY_METRICS_DENSITY=2
 
+# ==================================================
+# BUILD
+# ==================================================
 [buildozer]
+
 log_level = 2
-warn_on_root = 1
+warn_on_root = 0
