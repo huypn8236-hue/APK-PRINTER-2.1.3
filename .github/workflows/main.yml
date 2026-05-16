@@ -45,14 +45,18 @@ jobs:
       continue-on-error: true
       run: |
         echo "=== BUILD APK ==="
+        # Tạo file trả lời tự động cho câu hỏi root
+        echo "y" > /tmp/answer.txt
+        
         docker run --rm \
           -v $(pwd):/app \
           -v ~/.buildozer:/home/user/.buildozer \
+          -e BUILDOZER_IGNORE_ROOT=1 \
           docker.io/kivy/buildozer:latest \
-          bash -c "yes | buildozer android debug" 2>&1 | tee build_output.log
+          sh -c "buildozer android debug < /tmp/answer.txt" 2>&1 | tee build_output.log
         
         # Kiểm tra kết quả
-        if [ -f bin/*.apk ]; then
+        if ls bin/*.apk 1> /dev/null 2>&1; then
           echo "BUILD_SUCCESS=true" >> $GITHUB_OUTPUT
         else
           echo "BUILD_SUCCESS=false" >> $GITHUB_OUTPUT
