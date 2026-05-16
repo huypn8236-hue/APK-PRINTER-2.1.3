@@ -1,62 +1,55 @@
-name: Build APK with Buildozer
+[app]
 
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+# --- Thông tin ứng dụng ---
+title = Order Printer
+package.name = orderprinter
+package.domain = org.orderprinter
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+# --- File nguồn ---
+source.dir = .
+source.include_exts = py,png,jpg,jpeg,ttf,xml,json
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+# --- Phiên bản ---
+version = 1.0.0
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.9"
+# --- Hiển thị ---
+orientation = portrait
+fullscreen = 0
 
-    - name: Set up Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+# --- Thư viện yêu cầu (ĐÃ SỬA) ---
+requirements = python3,kivy==2.2.1,pyjnius,android,pillow==10.2.0,plyer,certifi,kivy-garden.zbarcam
 
-    - name: Accept Android SDK licenses
-      run: |
-        mkdir -p ~/.android
-        touch ~/.android/repositories.cfg
-        yes | sdkmanager --licenses 2>/dev/null || true
-        yes | $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+# --- Quyền Android ---
+android.permissions = CAMERA,INTERNET,ACCESS_NETWORK_STATE,BLUETOOTH,BLUETOOTH_ADMIN,BLUETOOTH_CONNECT,BLUETOOTH_SCAN,ACCESS_FINE_LOCATION,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,VIBRATE
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          git zip unzip python3-pip \
-          libffi-dev libssl-dev libsqlite3-dev \
-          libjpeg-dev libfreetype6-dev zlib1g-dev \
-          automake autoconf libtool libtool-bin \
-          autopoint gettext pkg-config m4 \
-          make cmake ninja-build libzbar-dev
-        pip install --upgrade pip wheel setuptools Cython==0.29.36
-        pip install buildozer==1.5.0
+# --- Tài nguyên đính kèm (có thể bỏ dòng này nếu không có file) ---
+# android.add_assets = wifi_printers.json
 
-    - name: Cache Buildozer
-      uses: actions/cache@v4
-      with:
-        path: ~/.buildozer
-        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+# --- Màn hình khởi động ---
+android.presplash_color = #FFFFFF
 
-    - name: Build APK
-      run: |
-        export CFLAGS="-fPIC"
-        buildozer android debug
+# --- Android SDK / NDK (ĐÃ SỬA) ---
+android.api = 30
+android.minapi = 21
+android.ndk = 23b
+android.ndk_api = 21
+android.archs = arm64-v8a,armeabi-v7a
 
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: order-printer-apk
-        path: bin/*.apk
+# --- p4a branch (ĐÃ SỬA) ---
+p4a.branch = develop
+
+android.allow_backup = True
+android.accept_sdk_license = True
+android.enable_androidx = True
+
+# --- Giảm kích thước APK ---
+exclude_patterns = tests,docs,*.pyc,*.pyo,*.md,__pycache__,.git
+
+# --- Môi trường ---
+environment = 
+    PYTHONOPTIMIZE=2
+    KIVY_METRICS_DENSITY=2
+
+[buildozer]
+log_level = 2
+warn_on_root = 1
