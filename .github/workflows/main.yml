@@ -25,22 +25,20 @@ jobs:
         echo "🔍 BƯỚC 1: KIỂM TRA FILE CẦN THIẾT"
         echo "=========================================="
         
-        FILES=("main.py" "buildozer.spec")
-        MISSING=0
-        
-        for file in "${FILES[@]}"; do
-          if [ -f "$file" ]; then
-            echo "✅ $file exists"
-          else
-            echo "❌ $file MISSING"
-            MISSING=1
-          fi
-        done
-        
-        if [ $MISSING -eq 1 ]; then
-          echo "❌ Thiếu file cần thiết, dừng build"
+        if [ -f "main.py" ]; then
+          echo "✅ main.py exists"
+        else
+          echo "❌ main.py MISSING"
           exit 1
         fi
+        
+        if [ -f "buildozer.spec" ]; then
+          echo "✅ buildozer.spec exists"
+        else
+          echo "❌ buildozer.spec MISSING"
+          exit 1
+        fi
+        
         echo "✅ Tất cả file cần thiết đều có"
 
     # =========================================================
@@ -61,7 +59,7 @@ jobs:
         fi
 
     # =========================================================
-    # 4. KIỂM TRA AST (Cấu trúc code)
+    # 4. KIỂM TRA AST
     # =========================================================
     - name: Check Python AST
       run: |
@@ -69,85 +67,51 @@ jobs:
         echo "🔍 BƯỚC 3: KIỂM TRA CẤU TRÚC CODE"
         echo "=========================================="
         
-        python << 'EOF'
+        python -c "
 import ast
-import sys
-
 with open('main.py', 'r', encoding='utf-8') as f:
     try:
         ast.parse(f.read())
         print('✅ AST parse OK')
     except SyntaxError as e:
         print(f'❌ AST parse error: {e}')
-        sys.exit(1)
-EOF
+        exit(1)
+"
 
     # =========================================================
-    # 5. KIỂM TRA THƯ VIỆN IMPORT
-    # =========================================================
-    - name: Check Python imports
-      run: |
-        echo "=========================================="
-        echo "🔍 BƯỚC 4: KIỂM TRA IMPORT THƯ VIỆN"
-        echo "=========================================="
-        
-        python << 'EOF'
-import sys
-import warnings
-warnings.filterwarnings('ignore')
-
-modules = ['kivy', 'kivy.app', 'kivy.uix.screenmanager', 'kivy.uix.boxlayout', 'kivy.uix.label']
-errors = []
-
-for module in modules:
-    try:
-        __import__(module)
-        print(f'✅ {module} OK')
-    except ImportError as e:
-        print(f'⚠️ {module}: {e} (có thể cài sau)')
-EOF
-
-    # =========================================================
-    # 6. KIỂM TRA buildozer.spec
+    # 5. KIỂM TRA buildozer.spec
     # =========================================================
     - name: Validate buildozer.spec
       run: |
         echo "=========================================="
-        echo "🔍 BƯỚC 5: KIỂM TRA buildozer.spec"
+        echo "🔍 BƯỚC 4: KIỂM TRA buildozer.spec"
         echo "=========================================="
         
-        # Kiểm tra các dòng bắt buộc
-        REQUIRED=("requirements" "android.api" "android.ndk" "android.permissions" "package.name")
+        grep -q "requirements" buildozer.spec && echo "✅ requirements found"
+        grep -q "android.api" buildozer.spec && echo "✅ android.api found"
+        grep -q "android.ndk" buildozer.spec && echo "✅ android.ndk found"
+        grep -q "android.permissions" buildozer.spec && echo "✅ android.permissions found"
         
-        for line in "${REQUIRED[@]}"; do
-          if grep -q "^$line" buildozer.spec; then
-            echo "✅ Found: $line"
-          else
-            echo "⚠️ Warning: $line not found"
-          fi
-        done
+        echo "✅ buildozer.spec check completed"
+
+    # =========================================================
+    # 6. KIỂM TRA IMPORT THƯ VIỆN
+    # =========================================================
+    - name: Check Python imports
+      run: |
+        echo "=========================================="
+        echo "🔍 BƯỚC 5: KIỂM TRA IMPORT THƯ VIỆN"
+        echo "=========================================="
         
-        # Kiểm tra Python version
-        if grep -q "python3==3.10.12" buildozer.spec; then
-          echo "✅ Python 3.10.12 configured"
-        else
-          echo "⚠️ Python version not fixed"
-        fi
-        
-        # Kiểm tra Kivy version
-        if grep -q "kivy==2.2.1" buildozer.spec; then
-          echo "✅ Kivy 2.2.1 configured"
-        else
-          echo "⚠️ Kivy version not fixed (may cause issues)"
-        fi
-        
-        # Kiểm tra API level
-        API=$(grep "android.api" buildozer.spec | cut -d'=' -f2 | tr -d ' ')
-        if [ "$API" -le 30 ]; then
-          echo "✅ android.api = $API (<=30 is stable)"
-        else
-          echo "⚠️ android.api = $API (>30 may have issues)"
-        fi
+        python -c "
+modules = ['kivy', 'kivy.app', 'kivy.uix.screenmanager', 'kivy.uix.boxlayout']
+for m in modules:
+    try:
+        __import__(m)
+        print(f'✅ {m} OK')
+    except ImportError as e:
+        print(f'⚠️ {m}: {e}')
+"
 
     # =========================================================
     # 7. KIỂM TRA CẤU TRÚC THƯ MỤC
@@ -158,14 +122,8 @@ EOF
         echo "🔍 BƯỚC 6: KIỂM TRA CẤU TRÚC THƯ MỤC"
         echo "=========================================="
         
-        echo "Cấu trúc thư mục:"
         ls -la
-        
-        if [ -f "wifi_printers.json" ]; then
-          echo "✅ wifi_printers.json exists"
-        else
-          echo "⚠️ wifi_printers.json not found (app will auto-create)"
-        fi
+        echo "✅ Structure check completed"
 
     # =========================================================
     # 8. SETUP PYTHON
@@ -178,10 +136,9 @@ EOF
     - name: Verify Python version
       run: |
         echo "=========================================="
-        echo "🔍 BƯỚC 7: XÁC NHẬN PYTHON VERSION"
+        echo "🔍 BƯỚC 7: XÁC NHẬN PYTHON"
         echo "=========================================="
         python --version
-        pip --version
 
     # =========================================================
     # 9. SETUP JAVA
@@ -195,38 +152,28 @@ EOF
     - name: Verify Java version
       run: |
         echo "=========================================="
-        echo "🔍 BƯỚC 8: XÁC NHẬN JAVA VERSION"
+        echo "🔍 BƯỚC 8: XÁC NHẬN JAVA"
         echo "=========================================="
         java -version
 
     # =========================================================
-    # 10. CÀI ĐẶT DEPENDENCIES HỆ THỐNG
+    # 10. CÀI ĐẶT DEPENDENCIES
     # =========================================================
     - name: Install system dependencies
       run: |
         echo "=========================================="
-        echo "🔍 BƯỚC 9: CÀI ĐẶT DEPENDENCIES HỆ THỐNG"
+        echo "🔍 BƯỚC 9: CÀI ĐẶT DEPENDENCIES"
         echo "=========================================="
         
         sudo apt-get update
         sudo apt-get install -y libzbar-dev
-        echo "✅ libzbar-dev installed"
-
-    # =========================================================
-    # 11. CÀI ĐẶT BUILD TOOLS
-    # =========================================================
-    - name: Install build tools
-      run: |
-        echo "=========================================="
-        echo "🔍 BƯỚC 10: CÀI ĐẶT BUILD TOOLS"
-        echo "=========================================="
-        
         pip install --upgrade pip
         pip install buildozer cython
-        echo "✅ buildozer version: $(buildozer --version)"
+        
+        echo "✅ Dependencies installed"
 
     # =========================================================
-    # 12. CACHE BUILD
+    # 11. CACHE
     # =========================================================
     - name: Cache Buildozer
       uses: actions/cache@v4
@@ -235,51 +182,47 @@ EOF
         key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
 
     # =========================================================
-    # 13. KIỂM TRA BUILD TRƯỚC
+    # 12. DỌN BUILD CŨ
     # =========================================================
     - name: Clean previous builds
       run: |
         echo "=========================================="
-        echo "🔍 BƯỚC 11: DỌN BUILD CŨ"
+        echo "🔍 BƯỚC 10: DỌN BUILD CŨ"
         echo "=========================================="
         buildozer android clean || true
-        rm -rf bin .buildozer/logs || true
+        rm -rf bin || true
 
     # =========================================================
-    # 14. BUILD APK
+    # 13. BUILD APK
     # =========================================================
     - name: Build APK
       run: |
         echo "=========================================="
-        echo "🔍 BƯỚC 12: BUILD APK"
+        echo "🔍 BƯỚC 11: BUILD APK"
         echo "=========================================="
         echo "⏳ Quá trình build có thể mất 15-20 phút..."
         echo ""
-        
         buildozer android debug
 
     # =========================================================
-    # 15. KIỂM TRA KẾT QUẢ BUILD
+    # 14. KIỂM TRA KẾT QUẢ
     # =========================================================
     - name: Check build result
       run: |
         echo "=========================================="
-        echo "🔍 BƯỚC 13: KIỂM TRA KẾT QUẢ BUILD"
+        echo "🔍 BƯỚC 12: KIỂM TRA KẾT QUẢ"
         echo "=========================================="
         
-        if [ -d "bin" ] && [ "$(ls -A bin/*.apk 2>/dev/null)" ]; then
+        if [ -d "bin" ] && ls bin/*.apk 1>/dev/null 2>&1; then
           echo "✅ BUILD THÀNH CÔNG!"
-          echo ""
-          echo "📦 FILE APK:"
           ls -la bin/
         else
           echo "❌ BUILD THẤT BẠI!"
-          echo "Không tìm thấy file APK trong thư mục bin/"
           exit 1
         fi
 
     # =========================================================
-    # 16. UPLOAD APK
+    # 15. UPLOAD APK
     # =========================================================
     - name: Upload APK
       uses: actions/upload-artifact@v4
@@ -288,13 +231,11 @@ EOF
         path: bin/*.apk
 
     # =========================================================
-    # 17. UPLOAD LOG (NẾU LỖI)
+    # 16. UPLOAD LOG LỖI (NẾU CÓ)
     # =========================================================
     - name: Upload error logs
       if: failure()
       uses: actions/upload-artifact@v4
       with:
         name: build-error-logs
-        path: |
-          .buildozer/logs/
-          build.log
+        path: .buildozer/logs/
