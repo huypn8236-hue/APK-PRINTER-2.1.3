@@ -48,6 +48,13 @@ jobs:
       with:
         path: ~/.buildozer
         key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+        restore-keys: |
+          buildozer-${{ runner.os }}-
+
+    - name: Clean previous builds (optional)
+      run: |
+        rm -rf .buildozer/android/platform/build-arm64-v8a_armeabi-v7a || true
+        rm -rf bin || true
 
     - name: Build APK
       run: |
