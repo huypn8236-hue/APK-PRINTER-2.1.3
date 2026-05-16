@@ -45,31 +45,38 @@ jobs:
       with:
         python-version: "3.10"
 
+    - name: Install Python development headers
+      run: |
+        echo "=== INSTALL PYTHON DEV HEADERS ==="
+        sudo apt-get update
+        sudo apt-get install -y python3-dev python3.10-dev
+        # Kiểm tra file Python.h đã tồn tại
+        if [ -f /usr/include/python3.10/Python.h ]; then
+          echo "✅ Python.h found at /usr/include/python3.10/Python.h"
+        else
+          echo "❌ Python.h not found!"
+          exit 1
+        fi
+
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Install dependencies
+    - name: Install build dependencies
       run: |
-        echo "=== INSTALL DEPS ==="
-        sudo apt-get update
-        # 🔥 QUAN TRỌNG: Thêm python3-dev để có Python.h
-        sudo apt-get install -y python3-dev libzbar-dev
+        echo "=== INSTALL BUILD DEPS ==="
+        sudo apt-get install -y libzbar-dev
         pip install --upgrade pip
         pip install buildozer cython
 
-    - name: Cache Buildozer
-      uses: actions/cache@v4
-      with:
-        path: ~/.buildozer
-        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
-
-    - name: Clean previous builds
+    - name: Clean old build cache
       run: |
-        buildozer android clean || true
-        rm -rf bin || true
+        echo "=== CLEANING CACHE ==="
+        rm -rf ~/.buildozer
+        rm -rf .buildozer
+        rm -rf bin
 
     - name: Build APK
       id: build
