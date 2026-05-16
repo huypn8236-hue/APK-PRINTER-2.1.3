@@ -55,7 +55,8 @@ jobs:
       run: |
         echo "=== INSTALL DEPS ==="
         sudo apt-get update
-        sudo apt-get install -y libzbar-dev
+        # 🔥 QUAN TRỌNG: Thêm python3-dev để có Python.h
+        sudo apt-get install -y python3-dev libzbar-dev
         pip install --upgrade pip
         pip install buildozer cython
 
