@@ -29,26 +29,100 @@ jobs:
           exit 1
         fi
 
-    - name: Build APK with Docker
+    - name: Check Python syntax
       run: |
+        echo "=== CHECK SYNTAX ==="
+        python -m py_compile main.py
+        if [ $? -eq 0 ]; then
+          echo "✅ Python syntax OK"
+        else
+          echo "❌ Python syntax error"
+          exit 1
+        fi
+
+    - name: Build APK with Docker
+      id: build
+      continue-on-error: true
+      run: |
+        echo "=== BUILD APK ==="
         docker run --rm \
           -v $(pwd):/app \
           -v ~/.buildozer:/home/user/.buildozer \
           docker.io/kivy/buildozer:latest \
-          buildozer android debug
-
-    - name: Check build result
-      run: |
+          bash -c "yes | buildozer android debug" 2>&1 | tee build_output.log
+        
+        # Kiểm tra kết quả
         if [ -f bin/*.apk ]; then
-          echo "✅ Build thành công!"
-          ls -la bin/
+          echo "BUILD_SUCCESS=true" >> $GITHUB_OUTPUT
         else
-          echo "❌ Build thất bại - không tìm thấy file APK"
-          ls -la || true
-          exit 1
+          echo "BUILD_SUCCESS=false" >> $GITHUB_OUTPUT
         fi
 
+    - name: EXTRACT AND DISPLAY ALL ERRORS
+      if: steps.build.outputs.BUILD_SUCCESS == 'false'
+      run: |
+        echo ""
+        echo "=========================================="
+        echo "🔴 DANH SÁCH LỖI PHÁT HIỆN 🔴"
+        echo "=========================================="
+        echo ""
+        
+        ERROR_FILE="build_output.log"
+        
+        if [ ! -f "$ERROR_FILE" ]; then
+          echo "⚠️ Không tìm thấy file log build"
+          exit 1
+        fi
+        
+        echo "--- 1. LỖI DEPENDENCIES / THƯ VIỆN ---"
+        grep -E "No module named|ImportError|ModuleNotFoundError|Could not find|No matching distribution" $ERROR_FILE 2>/dev/null | head -20 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 2. LỖI COMPILE / C/C++ ---"
+        grep -E "error:|Error:|ERROR:" $ERROR_FILE 2>/dev/null | grep -v "warning:" | head -30 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 3. LỖI JAVA / GRADLE ---"
+        grep -E "FAILED|java:|gradle|JAVA_HOME|JDK" $ERROR_FILE 2>/dev/null | head -15 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 4. LỖI ANDROID SDK / NDK ---"
+        grep -E "sdkmanager|ndk|SDK|license|build-tools|platform-tools" $ERROR_FILE 2>/dev/null | grep -i "error\|fail\|missing" | head -15 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 5. LỖI THIẾU FILE ---"
+        grep -E "No such file|not found|missing" $ERROR_FILE 2>/dev/null | grep -v "warning:" | head -15 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 6. LỖI KIVY / ZBAR ---"
+        grep -E "kivy|zbarcam|zbar|Camera" $ERROR_FILE 2>/dev/null | grep -i "error\|fail" | head -10 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "--- 7. LỖI PYTHON VERSION ---"
+        grep -E "Python [0-9]|version.*[0-9]" $ERROR_FILE 2>/dev/null | grep -i "error\|fail\|not supported" | head -10 || echo "Không có lỗi này"
+        echo ""
+        
+        echo "=========================================="
+        echo "📁 Log đầy đủ được lưu trong artifact"
+        echo "=========================================="
+        
+        exit 1
+
+    - name: Upload full build log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: full-build-log
+        path: build_output.log
+
+    - name: Check build result and fail if error
+      if: steps.build.outputs.BUILD_SUCCESS == 'false'
+      run: |
+        echo "❌ BUILD THẤT BẠI!"
+        exit 1
+
     - name: Upload APK
+      if: steps.build.outputs.BUILD_SUCCESS == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: order-printer-apk
